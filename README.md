@@ -2,9 +2,60 @@
 
 ### Layered Recursive Memory for SillyTavern
 
+> **Fork notice.** This is a fork of [Summaryception](https://github.com/Lodactio/Extension-Summaryception) by Lodactio, maintained by [qvazzar](https://github.com/qvazzar/Extension-Summaryception). It is a **drop-in replacement**: same extension folder name (`Extension-Summaryception`), same settings key and same chat-metadata key, so existing chats, snippets and settings keep working. It is inspired in places by [vadash's fork](https://github.com/vadash/Extension-Summaryception); no code was copied from it. Licensed under AGPL-3.0, like the original. See [Changes in this fork](#changes-in-this-fork).
+
 > Your AI remembers **thousands of turns** in under **20k tokens**. No context bloat. No lost plot threads. No compromises.
 
 Summaryception is a non-destructive, context-aware memory system for [SillyTavern](https://github.com/SillyTavern/SillyTavern) that replaces brute-force context stuffing with intelligent layered summarization. It keeps your most recent turns verbatim while compressing older conversation into ultra-compact summary snippets — organized in recursive layers that scale indefinitely.
+
+---
+
+## Changes in this fork
+
+### Injection placement
+
+The summary block can be placed in several ways (Settings, "Injection Placement"):
+
+- **Position**: Before Prompt, In Prompt, In Chat (at depth), or Macro Only.
+- **Depth** (In Chat only), with quick presets for 0 (end of chat) and 1 (before the last message).
+- **Role**: system, user or assistant.
+
+Defaults are In Chat, depth 0, role user (stock Summaryception used in-chat depth 12, role user).
+
+**Macro Only** registers the `{{summaryception}}` macro, which expands to the full wrapped summary block. Nothing is injected automatically in this mode, and in the other modes the macro is empty, so the block is never duplicated.
+
+Some providers may move or merge system-role messages that appear in the middle of the chat, so user or assistant is the safer role for In Chat. In Text Completion mode the role only applies to In Chat.
+
+### Reliable hiding
+
+- Every summarized message gets a stable ID (`extra.sc_id`). The set of IDs the extension owns and a boundary anchor are stored in chat metadata. Existing chats are migrated automatically.
+- The extension never hides or unhides messages that you (or another extension) hid.
+- One reconciliation routine brings the chat in line with the ownership state. It runs on chat load, before every generation, after every batch (with verification, one retry and a warning toast if messages are still not hidden) and on Repair.
+- Orphans are handled: deleted messages, branches, swipes, and a boundary that points past the end of the chat.
+- Repair no longer unhides messages it does not own, and Clear Memory only unhides owned messages.
+- Layer Stats shows owned versus actually hidden messages and highlights mismatches.
+- Deleting a snippet no longer resets the boundary to -1 when layer 0 has no ranged snippets.
+
+### Honest compatibility mode
+
+The former "Disable Message Hiding" setting is now **"Don't hide summarized messages (compatibility mode)"**. When it is enabled, summarized messages **stay in the LLM prompt** alongside their summaries. Use it only with extensions that manage message hiding themselves.
+
+### Optional token threshold
+
+A new setting, **Token Threshold** (0 = off). When set, an automatic batch runs only if the turn condition is met **and** the visible (non-hidden) chat is longer than N tokens, counted with SillyTavern's tokenizer. Batching itself stays turn-based. Force Summarize ignores the threshold.
+
+### /sc-status
+
+`/sc-status` opens a popup (SillyTavern discards the return values of typed commands) with the boundary, snippet counts per layer, owned and actually hidden message counts, mismatches, injection placement and the token threshold. `/sc-status quiet=true` returns plain text only, for piping.
+
+### Fixes
+
+- Macro names in the settings hints were rendered empty by Handlebars; they are now shown correctly.
+- The summary injection is re-applied correctly after a chat reload (SillyTavern clears extension prompts on chat load).
+
+### Development
+
+Pure logic lives in `lib/` and is covered by unit tests. Run them with `node --test` (Node 18+, no dependencies). `package.json` is dev-only and ignored by SillyTavern.
 
 ---
 
@@ -42,6 +93,8 @@ And because each snippet is written with knowledge of all previous snippets, the
 YOUR CHAT (e.g., 200 turns)
 │
 │  Turns 1-180: Ghosted (hidden from LLM, still readable by you)
+│               (unless compatibility mode "Don't hide summarized
+│                messages" is on: then they stay in the prompt)
 │  Turns 181-200: Kept VERBATIM (7 most recent assistant turns)
 │
 │  The ghosted turns have been compressed into:
@@ -122,6 +175,8 @@ For comparison, most roleplayers hit 17,500 tokens by **turn 10** with verbatim 
 ## 👻 Non-Destructive Ghost Mode
 
 Summaryception never deletes your messages. Summarized turns are **ghosted** — hidden from the LLM context but fully visible and readable in your chat UI. Scroll up anytime to read the original prose.
+
+> This is true unless the compatibility mode **"Don't hide summarized messages"** is enabled. In that mode summarized messages stay in the prompt (see [Changes in this fork](#honest-compatibility-mode)).
 
 - 👻 Ghosted messages show a system icon in the chat
 - Clear Memory unghosts everything instantly
@@ -251,14 +306,18 @@ Summaryception can use different backends for summarization, independent of your
 
 ### From SillyTavern UI
 1. Open **Extensions** → **Install Extension**
-2. Paste: `https://github.com/Lodactio/Extension-Summaryception`
+2. Paste: `https://github.com/Lodactio/Extension-Summaryception` (stock) or `https://github.com/qvazzar/Extension-Summaryception` (this fork)
 3. Click Install
 4. Find **🧠 Summaryception** in Extensions settings
+
+> The folder must stay named `Extension-Summaryception` (the extension loads its settings template from `third-party/Extension-Summaryception`). Installing this fork from its URL keeps that name. To switch from the stock extension, remove it first: only one Summaryception fork can be installed at a time in the same folder.
 
 ### Manual
 ```bash
 cd SillyTavern/data/default-user/extensions/third-party/
 git clone https://github.com/Lodactio/Extension-Summaryception
+# or this fork:
+git clone https://github.com/qvazzar/Extension-Summaryception
 ```
 Restart SillyTavern and enable the extension.
 
@@ -296,14 +355,14 @@ Highly Polished Summaryception with many requested features by the community and
 
 ---
 
-## 🤝 Credits
+## Credits & License
 
-Built with frustration at context limits and love for long-form roleplay.
+- Original extension: [Summaryception](https://github.com/Lodactio/Extension-Summaryception) by Lodactio. Built with frustration at context limits and love for long-form roleplay.
+- This fork: [qvazzar](https://github.com/qvazzar/Extension-Summaryception).
+- Inspiration: [vadash's fork](https://github.com/vadash/Extension-Summaryception) (no code copied).
 
 If this saves your 500-turn adventure from amnesia, consider starring the repo. ⭐
 
----
+Licensed under AGPL-3.0 (see `LICENSE`).
 
-## 📄 License
-
-AGPL-3.0
+**Modification notice (AGPL section 5a):** This fork modifies the original work. Changes started in November 2026; see "Changes in this fork" and the git history.

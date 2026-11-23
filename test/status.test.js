@@ -1,3 +1,4 @@
+// Part of the Summaryception fork by qvazzar. Licensed under AGPL-3.0.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { buildStatusLines, formatStatusText } from '../lib/status.js';

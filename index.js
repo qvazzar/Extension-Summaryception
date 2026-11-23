@@ -1,3 +1,4 @@
+// Summaryception (fork) — originally by Lodactio (https://github.com/Lodactio/Extension-Summaryception). Modified by qvazzar, November 2026: see README "Changes in this fork". Licensed under AGPL-3.0.
 /**
  * Summaryception v5.5.4 — Layered Recursive Summarization for SillyTavern
  *
