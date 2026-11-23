@@ -38,6 +38,11 @@ import {
     findNotHidden,
     findStillHidden,
 } from './lib/reconcile.js';
+import {
+    normalizeThreshold,
+    shouldRunBatch,
+    countVisibleTokens,
+} from './lib/threshold.js';
 
 const MODULE_NAME = 'summaryception';
 const LOG_PREFIX = '[Summaryception]';
@@ -101,6 +106,7 @@ const defaultSettings = Object.freeze({
     enabled: true,
     verbatimTurns: 10,
     turnsPerSummary: 3,
+    tokenThreshold: 0,
     snippetsPerLayer: 20,
     snippetsPerPromotion: 3,
     maxLayers: 5,
@@ -967,6 +973,27 @@ async function callSummarizer(storyTxt, contextStr) {
 
 // ─── Core: Summarize Oldest Verbatim Turns ──────────────────────────
 
+let lastThresholdCheck = null;
+let thresholdWarned = false;
+
+async function evaluateTokenThreshold(chat, threshold) {
+    let visibleTokens = null;
+    try {
+        const countFn = SillyTavern.getContext().getTokenCountAsync;
+        if (typeof countFn !== 'function') throw new Error('getTokenCountAsync is not available');
+        visibleTokens = await countVisibleTokens(chat, countFn);
+    } catch (err) {
+        visibleTokens = null;
+        if (!thresholdWarned) {
+            thresholdWarned = true;
+            console.warn('[Summaryception] Token threshold: tokenizer unavailable, treating threshold as met.', err);
+        }
+    }
+    const met = shouldRunBatch({ turnConditionMet: true, threshold, visibleTokens });
+    lastThresholdCheck = { threshold, visibleTokens, met, at: Date.now() };
+    return met;
+}
+
 async function maybeSummarizeTurns() {
     const s = getSettings();
     if (!s.enabled) return;
@@ -982,6 +1009,15 @@ async function maybeSummarizeTurns() {
     log(`Visible assistant turns: ${visibleTurns.length}, limit: ${s.verbatimTurns}`);
 
     if (visibleTurns.length <= s.verbatimTurns) return;
+
+    const tokenThreshold = normalizeThreshold(s.tokenThreshold);
+    if (tokenThreshold > 0) {
+        const met = await evaluateTokenThreshold(chat, tokenThreshold);
+        if (!met) {
+            log(`Token threshold not met (${lastThresholdCheck.visibleTokens} <= ${tokenThreshold}); skipping automatic batch`);
+            return;
+        }
+    }
 
     const overflow = visibleTurns.length - s.verbatimTurns;
 
@@ -1711,6 +1747,7 @@ function updateUI() {
         $('#sc_verbatim_turns_val').text(s.verbatimTurns);
         $('#sc_turns_per_summary').val(s.turnsPerSummary);
         $('#sc_turns_per_summary_val').text(s.turnsPerSummary);
+        $('#sc_token_threshold').val(normalizeThreshold(s.tokenThreshold));
         $('#sc_snippets_per_layer').val(s.snippetsPerLayer);
         $('#sc_snippets_per_layer_val').text(s.snippetsPerLayer);
         $('#sc_snippets_per_promotion').val(s.snippetsPerPromotion);
@@ -2111,6 +2148,12 @@ function bindUIEvents() {
             updateInjection();
         });
     }
+
+    $(document).on('change', '#sc_token_threshold', function () {
+        getSettings().tokenThreshold = normalizeThreshold($(this).val());
+        saveSettings();
+        updateUI();
+    });
 
     const textareas = [
         { id: '#sc_injection_template', key: 'injectionTemplate' },
@@ -2520,6 +2563,7 @@ function bindUIEvents() {
         // Reset sliders
         s.verbatimTurns = defaultSettings.verbatimTurns;
         s.turnsPerSummary = defaultSettings.turnsPerSummary;
+        s.tokenThreshold = defaultSettings.tokenThreshold;
         s.snippetsPerLayer = defaultSettings.snippetsPerLayer;
         s.snippetsPerPromotion = defaultSettings.snippetsPerPromotion;
         s.maxLayers = defaultSettings.maxLayers;

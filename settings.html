@@ -291,6 +291,14 @@
                         </div>
                     </div>
 
+                    <div class="sc-row">
+                        <label for="sc_token_threshold">
+                            <span>Token Threshold (0 = off)</span>
+                            <small class="sc-hint">When set, an automatic batch runs only if the turn condition is met AND the visible (non-hidden) chat is longer than this many tokens, counted with SillyTavern's current tokenizer. Batching stays turn-based. Force Summarize ignores this.</small>
+                        </label>
+                        <input type="number" id="sc_token_threshold" class="text_pole" min="0" step="100" />
+                    </div>
+
                     <hr class="sc-divider" />
 
                     <!-- Layer Settings -->
