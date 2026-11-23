@@ -16,6 +16,12 @@ import {
     populateProfileDropdown,
     getConnectionDisplayName,
 } from './connectionutil.js';
+import {
+    PLACEMENT_DEFAULTS,
+    normalizePlacement,
+    buildInjectionArgs,
+    injectionSignature,
+} from './lib/placement.js';
 
 const MODULE_NAME = 'summaryception';
 const LOG_PREFIX = '[Summaryception]';
@@ -48,13 +54,6 @@ const TUNING = Object.freeze({
     // ── Progress Reporting ─────────────────────────────────────────
     ghostProgressInterval:    10,       // update toast every N messages during ghost/unghost
     repairProgressInterval:   5,        // update toast every N messages during repair scan
-
-    // ── Injection Position ─────────────────────────────────────────
-    // setExtensionPrompt(name, text, position, depth, scan, role)
-    injectionPosition:        1,        // 0 = system prompt, 1 = in-chat
-    injectionDepth:           12,       // messages from generation point
-    injectionScan:            false,    // watched by World Info?
-    injectionRole:            1,        // 0 = system, 1 = user, 2 = assistant
 
     // ── Toast Durations (ms) ───────────────────────────────────────
     // Named by intent so you can tune notification verbosity in one place.
@@ -89,6 +88,9 @@ const defaultSettings = Object.freeze({
     snippetsPerLayer: 20,
     snippetsPerPromotion: 3,
     maxLayers: 5,
+    injectionPosition: PLACEMENT_DEFAULTS.injectionPosition,
+    injectionDepth: PLACEMENT_DEFAULTS.injectionDepth,
+    injectionRole: PLACEMENT_DEFAULTS.injectionRole,
     injectionTemplate: '\n\n<auto_injected_historical_context>\n[system guidance: this is a historical summary of messages that occurred prior to the oldest assistant message currently in context for this chat]\n{{summary}}\n</auto_injected_historical_context>\n\n',
 
     summarizerSystemPrompt:
@@ -1520,34 +1522,52 @@ function assembleSummaryBlock() {
 
 // ─── Injection via setExtensionPrompt ────────────────────────────────
 
-let _lastInjected = '';
-
 function updateInjection() {
     try {
-        const { setExtensionPrompt } = SillyTavern.getContext();
+        const { setExtensionPrompt, extensionPrompts } = SillyTavern.getContext();
         const s = getSettings();
 
-        if (!s.enabled) {
-            if (_lastInjected !== '') {
-                setExtensionPrompt(MODULE_NAME, '',
-                    TUNING.injectionPosition, TUNING.injectionDepth,
-                    TUNING.injectionScan, TUNING.injectionRole);
-                _lastInjected = '';
-            }
-            return;
-        }
+        const args = buildInjectionArgs(s, s.enabled ? assembleSummaryBlock() : '');
+        // Compare against the live entry, not a module-level cache: ST's
+        // clearChat() resets extension_prompts on every chat (re)load.
+        const live = extensionPrompts?.[MODULE_NAME];
+        if (live && injectionSignature(live) === injectionSignature(args)) return;
 
-        const summaryBlock = assembleSummaryBlock();
-        if (summaryBlock === _lastInjected) return;
+        setExtensionPrompt(MODULE_NAME, args.value, args.position, args.depth, args.scan, args.role);
 
-        setExtensionPrompt(MODULE_NAME, summaryBlock || '',
-            TUNING.injectionPosition, TUNING.injectionDepth,
-            TUNING.injectionScan, TUNING.injectionRole);
-        _lastInjected = summaryBlock || '';
-
-        log(`Injection updated: ${(summaryBlock || '').length} chars`);
+        log(`Injection updated: ${args.value.length} chars (position ${args.position}, depth ${args.depth}, role ${args.role}${args.macroOnly ? ', macro only' : ''})`);
     } catch (e) {
         log('updateInjection error:', e);
+    }
+}
+
+// ─── {{summaryception}} macro ────────────────────────────────────────
+
+function summaryMacroHandler() {
+    const s = getSettings();
+    if (!s.enabled) return '';
+    if (normalizePlacement(s).position !== 'macro_only') return '';
+    return assembleSummaryBlock();
+}
+
+function registerSummaryMacro() {
+    try {
+        const ctx = SillyTavern.getContext();
+        const description = 'Summaryception summary block (only filled when Injection Position is "Macro Only").';
+        const legacyOk = typeof ctx.registerMacro === 'function';
+        if (ctx.powerUserSettings?.experimental_macro_engine === false && legacyOk) {
+            // Legacy registration also feeds the new engine.
+            ctx.registerMacro('summaryception', () => summaryMacroHandler(), description);
+        } else if (ctx.macros?.register) {
+            const options = { description, handler: () => summaryMacroHandler() };
+            const category = ctx.macros.category?.CHAT;
+            if (category) options.category = category;
+            ctx.macros.register('summaryception', options);
+        } else if (legacyOk) {
+            ctx.registerMacro('summaryception', () => summaryMacroHandler(), description);
+        }
+    } catch (e) {
+        console.error(LOG_PREFIX, 'Failed to register {{summaryception}} macro:', e);
     }
 }
 
@@ -1677,6 +1697,15 @@ function updateUI() {
         $('#sc_max_layers').val(s.maxLayers);
         $('#sc_max_layers_val').text(s.maxLayers);
         $('#sc_injection_template').val(s.injectionTemplate);
+        {
+            const pl = normalizePlacement(s);
+            $('#sc_injection_position').val(pl.position);
+            $('#sc_injection_depth').val(pl.depth);
+            $('#sc_injection_role').val(pl.role);
+            $('#sc_injection_depth_row').toggle(pl.position === 'in_chat');
+            $('#sc_injection_role_row').toggle(pl.position !== 'macro_only');
+            $('#sc_macro_only_hint').toggle(pl.position === 'macro_only');
+        }
         $('#sc_summarizer_system_prompt').val(s.summarizerSystemPrompt);
         $('#sc_summarizer_user_prompt').val(s.summarizerUserPrompt);
         // ── Prompt preset migration & sync ──
@@ -2043,6 +2072,29 @@ function bindUIEvents() {
             saveSettings();
         });
     }
+
+    const applyPlacement = (key, value) => {
+        const s = getSettings();
+        const next = normalizePlacement({ ...s, [key]: value });
+        s.injectionPosition = next.position;
+        s.injectionDepth = next.depth;
+        s.injectionRole = next.role;
+        saveSettings();
+        updateInjection();
+        updateUI();
+    };
+    $(document).on('change', '#sc_injection_position', function () {
+        applyPlacement('injectionPosition', $(this).val());
+    });
+    $(document).on('change', '#sc_injection_role', function () {
+        applyPlacement('injectionRole', $(this).val());
+    });
+    $(document).on('change', '#sc_injection_depth', function () {
+        applyPlacement('injectionDepth', $(this).val());
+    });
+    $(document).on('click', '.sc_depth_preset', function () {
+        applyPlacement('injectionDepth', $(this).data('depth'));
+    });
 
     $(document).on('change', '#sc_debug_mode', function () {
         getSettings().debugMode = $(this).prop('checked');
@@ -2447,7 +2499,7 @@ function bindUIEvents() {
     $(document).on('click', '#sc_reset_defaults', function () {
         if (!confirm(
             'Reset all Advanced Settings to defaults?\n\n' +
-            'This will reset sliders, prompts, injection template, and strip patterns.\n' +
+            'This will reset sliders, prompts, injection template, injection placement, and strip patterns.\n' +
             'It will NOT clear your summary memory or connection settings.'
         )) return;
 
@@ -2465,6 +2517,9 @@ function bindUIEvents() {
         s.summarizerUserPrompt = defaultSettings.summarizerUserPrompt;
         s.promptPreset = defaultSettings.promptPreset;
         s.injectionTemplate = defaultSettings.injectionTemplate;
+        s.injectionPosition = PLACEMENT_DEFAULTS.injectionPosition;
+        s.injectionDepth = PLACEMENT_DEFAULTS.injectionDepth;
+        s.injectionRole = PLACEMENT_DEFAULTS.injectionRole;
         s.stripPatterns = [...defaultSettings.stripPatterns];
         s.summarizerResponseLength = defaultSettings.summarizerResponseLength;
 
@@ -2771,6 +2826,7 @@ async function fetchProfilesFallback(selectElement, currentValue) {
     eventSource.on(event_types.GENERATION_STARTED, onGenerationStarted);
 
     registerSlashCommands();
+    registerSummaryMacro();
 
     eventSource.on(event_types.APP_READY, () => {
         updateInjection();

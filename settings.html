@@ -80,6 +80,36 @@
 
             <hr class="sc-divider" />
 
+            <!-- ═══ Injection Placement ═══ -->
+            <h4 class="sc-section-title">📍 Injection Placement</h4>
+            <div class="sc-row">
+                <label for="sc_injection_position">Position</label>
+                <select id="sc_injection_position" class="text_pole">
+                    <option value="before_prompt">Before Prompt</option>
+                    <option value="in_prompt">In Prompt</option>
+                    <option value="in_chat">In Chat (at depth)</option>
+                    <option value="macro_only">Macro Only (&#123;&#123;summaryception&#125;&#125;)</option>
+                </select>
+            </div>
+            <div id="sc_injection_depth_row" class="sc-row sc-depth-row">
+                <label for="sc_injection_depth">Depth</label>
+                <input id="sc_injection_depth" type="number" class="text_pole" min="0" step="1" />
+                <button type="button" class="menu_button sc_depth_preset" data-depth="0">End of chat (0)</button>
+                <button type="button" class="menu_button sc_depth_preset" data-depth="1">Before last message (1)</button>
+            </div>
+            <div id="sc_injection_role_row" class="sc-row">
+                <label for="sc_injection_role">Role</label>
+                <select id="sc_injection_role" class="text_pole">
+                    <option value="system">System</option>
+                    <option value="user">User</option>
+                    <option value="assistant">Assistant</option>
+                </select>
+            </div>
+            <small class="sc-hint">Some providers may move or merge system-role messages that appear in the middle of the chat (for example, into the system instruction). For In Chat placement, User or Assistant is the safer choice. In Text Completion mode the role only applies to In Chat placement.</small>
+            <small id="sc_macro_only_hint" class="sc-hint" style="display:none;">Nothing is injected automatically. Put &#123;&#123;summaryception&#125;&#125; where the summary should go (e.g. a Prompt Manager entry, the Story String, or a character card). The macro is empty in all other modes, so it never duplicates the automatic injection.</small>
+
+            <hr class="sc-divider" />
+
             <!-- ═══ Advanced Settings ═══ -->
             <div class="inline-drawer">
                 <div class="inline-drawer-toggle inline-drawer-header">
