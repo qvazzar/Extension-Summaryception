@@ -1,0 +1,10 @@
+{
+  "name": "extension-summaryception-fork",
+  "private": true,
+  "type": "module",
+  "description": "Dev-only manifest for running unit tests with node --test. Not used by SillyTavern.",
+  "license": "AGPL-3.0",
+  "scripts": {
+    "test": "node --test"
+  }
+}
