@@ -476,3 +476,8 @@
     align-items: center;
     gap: 6px;
 }
+
+.sc-settings .sc-mismatch {
+    color: var(--warning, #e8a33d);
+    font-weight: bold;
+}
