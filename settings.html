@@ -23,11 +23,11 @@
                 </label>
             </div>
 
-            <!-- ═══ Stop hiding verbatim turns ═══ -->
+            <!-- ═══ Compatibility mode: don't hide summarized messages (they stay in the LLM prompt) ═══ -->
             <label class="checkbox_label" for="sc_disable_ghosting">
                 <input type="checkbox" id="sc_disable_ghosting" />
-                <span>Disable Message Hiding</span>
-                <small class="sc-hint">Messages will still be summarized and excluded from LLM context, but won't be visually hidden. Useful for compatibility with other extensions (QVink, MemoryBooks, etc.).</small>
+                <span>Don't hide summarized messages (compatibility mode)</span>
+                <small class="sc-hint">Summarized messages STAY in the LLM prompt: the model sees both the original messages and their summaries, which costs extra tokens and repeats content. This exists only for compatibility with extensions that manage message hiding themselves (e.g. QVink, MemoryBooks). Turning it on unhides the messages Summaryception hid; turning it off hides them again.</small>
             </label>
 
             <!-- ═══ Actions ═══ -->

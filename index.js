@@ -137,7 +137,7 @@ Write in short phrases, no more than 20; output must be a single line:`,
     savedCustomPrompts: {},        // { name: promptText } — named custom prompt slots
     lastCustomPrompt: '',          // Auto-saved when switching away from custom
     pauseSummarization: false,  // true = stop processing, keep injecting
-    disableGhosting: false,  // true = mark as summarized but don't hide messages
+    disableGhosting: false,  // true = still summarize and track messages, but don't set is_system (they stay in the LLM prompt)
 
     stripPatterns: [
         '<|channel>thought',
@@ -1777,9 +1777,9 @@ function updateUI() {
             }
         } catch (e) { /* no chat loaded */ }
         if (s.disableGhosting) {
-            statsHtml += `<div class="sc-layer-stat">Messages are ghosted as metadata only — not visually hidden.</div>`;
+            statsHtml += `<div class="sc-layer-stat sc-mismatch">⚠️ Hiding is disabled: summarized messages stay in the LLM prompt (originals + summaries).</div>`;
         } else {
-            statsHtml += `<div class="sc-layer-stat">Ghosted messages are hidden from the LLM, visible to you.</div>`;
+            statsHtml += `<div class="sc-layer-stat sc-muted">Summarized messages are hidden from the LLM (still visible to you in the chat).</div>`;
         }
         if (store.layers) {
             for (let i = store.layers.length - 1; i >= 0; i--) {
@@ -2069,8 +2069,14 @@ function bindUIEvents() {
         updateUI();
 
         if ($(this).prop('checked')) {
+            toastr.warning(
+                'Hiding disabled: summarized messages are back in the LLM prompt, so the model now sees both the originals and the summaries.',
+                'Summaryception',
+                { timeOut: TUNING.toastLonger }
+            );
+        } else {
             toastr.info(
-                'Message hiding disabled. Summarized messages will remain visible but still be excluded from LLM context via the sc_ghosted flag.',
+                'Hiding enabled: summarized messages are hidden from the LLM again.',
                 'Summaryception',
                 { timeOut: TUNING.toastLonger }
             );
