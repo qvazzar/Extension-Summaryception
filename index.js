@@ -44,6 +44,8 @@ import {
     countVisibleTokens,
 } from './lib/threshold.js';
 
+import { buildStatusLines, formatStatusText } from './lib/status.js';
+
 const MODULE_NAME = 'summaryception';
 const LOG_PREFIX = '[Summaryception]';
 // const TRACE_MODE = true;  // ultra-verbose logging
@@ -1676,24 +1678,63 @@ function registerSlashCommands() {
 
         const { SlashCommandParser, SlashCommand } = ctx;
 
-        SlashCommandParser.addCommandObject(SlashCommand.fromProps({
+        const statusProps = {
             name: 'sc-status',
-            callback: () => {
+            callback: async (args) => {
+                const settings = getSettings();
                 const store = getChatStore();
-                const lines = ['**Summaryception Status**'];
-                lines.push(`Summarized up to index: ${store.summarizedUpTo}`);
-                if (store.layers) {
-                    for (let i = 0; i < store.layers.length; i++) {
-                        const l = store.layers[i];
-                        if (l && l.length > 0) {
-                            lines.push(`Layer ${i}: ${l.length} snippets`);
-                        }
+                const { chat } = SillyTavern.getContext();
+                let plan = null;
+                if (Array.isArray(store.ownedIds)) {
+                    plan = planReconcile({
+                        chat: Array.isArray(chat) ? chat : [],
+                        ownedIds: store.ownedIds,
+                        summarizedUpTo: store.summarizedUpTo,
+                        boundaryId: store.boundaryId,
+                        disableGhosting: settings.disableGhosting,
+                    });
+                }
+                const lines = buildStatusLines({
+                    enabled: !!settings.enabled,
+                    paused: !!settings.pauseSummarization,
+                    store,
+                    snippetsPerLayer: settings.snippetsPerLayer,
+                    plan,
+                    disableGhosting: !!settings.disableGhosting,
+                    placement: normalizePlacement(settings),
+                    threshold: normalizeThreshold(settings.tokenThreshold),
+                    lastThresholdCheck,
+                    now: Date.now(),
+                });
+                const text = formatStatusText(lines);
+                const quiet = args?.quiet === true || args?.quiet === 'true';
+                if (!quiet) {
+                    const c = SillyTavern.getContext();
+                    if (typeof c.callGenericPopup === 'function') {
+                        // Intentionally not awaited so the command returns immediately.
+                        c.callGenericPopup(
+                            '<div class="sc-status-popup">' + lines.map(escapeHtml).join('<br>') + '</div>',
+                            c.POPUP_TYPE?.TEXT ?? 1,
+                        );
+                    } else {
+                        toastr.info(text, 'Summaryception');
                     }
                 }
-                return lines.join('\n');
+                return text;
             },
-            helpString: 'Show Summaryception layer status',
-        }));
+            helpString: 'Show Summaryception status: boundary, snippets per layer, owned vs actually hidden messages, mismatches, placement and token threshold. Use quiet=true to only return the text.',
+        };
+        if (ctx.SlashCommandNamedArgument?.fromProps) {
+            statusProps.namedArgumentList = [
+                ctx.SlashCommandNamedArgument.fromProps({
+                    name: 'quiet',
+                    description: 'only return the status text, do not show a popup',
+                    typeList: [ctx.ARGUMENT_TYPE?.BOOLEAN ?? 'boolean'],
+                    defaultValue: 'false',
+                }),
+            ];
+        }
+        SlashCommandParser.addCommandObject(SlashCommand.fromProps(statusProps));
 
         SlashCommandParser.addCommandObject(SlashCommand.fromProps({
             name: 'sc-clear',

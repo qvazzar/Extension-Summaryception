@@ -481,3 +481,9 @@
     color: var(--warning, #e8a33d);
     font-weight: bold;
 }
+
+.sc-status-popup {
+    text-align: left;
+    font-family: monospace;
+    white-space: pre-wrap;
+}
