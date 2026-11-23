@@ -394,7 +394,7 @@
                         <label for="sc_summarizer_user_prompt">
                             <span>User Prompt (Turn → Snippet & Layer Promotion)</span>
                             <small class="sc-hint">
-                                Variables: <code>{{player_name}}</code> <code>{{context_str}}</code> (that layer's existing snippets) <code>{{story_txt}}</code> (passage to summarize)
+                                Variables: <code>&#123;&#123;player_name&#125;&#125;</code> <code>&#123;&#123;context_str&#125;&#125;</code> (that layer's existing snippets) <code>&#123;&#123;story_txt&#125;&#125;</code> (passage to summarize)
                             </small>
                         </label>
                         <textarea id="sc_summarizer_user_prompt" class="text_pole sc-textarea sc-textarea-tall" rows="10"></textarea>
@@ -403,7 +403,7 @@
                     <div class="sc-row">
                         <label for="sc_injection_template">
                             <span>Injection Wrapper Template</span>
-                            <small class="sc-hint">Wraps the assembled block. Use <code>{{summary}}</code> for the combined text.</small>
+                            <small class="sc-hint">Wraps the assembled block. Use <code>&#123;&#123;summary&#125;&#125;</code> for the combined text.</small>
                         </label>
                         <textarea id="sc_injection_template" class="text_pole sc-textarea" rows="3"></textarea>
                     </div>
